@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Zarpa · Simulador de chat</title>
+<meta http-equiv="Cache-Control" content="no-store">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+tailwind.config = { theme: { extend: { colors: {
+  wa: '#1f6b46', wadark: '#175436', chat: '#ece5dd', mine: '#dcf8c6', sea: '#0b2a4a'
+}, fontFamily: { sans: ['Helvetica Neue','Segoe UI','Roboto','Arial','sans-serif'] } } } }
+</script>
+<style>
+  :root { box-sizing: border-box; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  html, body { height: 100%; margin: 0; }
+  body { background: radial-gradient(circle at 20% 10%, #12426f 0%, #0b2a4a 45%, #061a30 100%); }
+  .chatbg { background-color: #ece5dd; background-image: radial-gradient(rgba(31,107,70,.08) 1.5px, transparent 1.5px); background-size: 22px 22px; }
+  .bubble-in { border-radius: 0 18px 18px 18px; }
+  .bubble-out { border-radius: 18px 0 18px 18px; }
+  .pop { animation: pop .18s ease-out; }
+  @keyframes pop { from { transform: translateY(6px); opacity: 0 } to { transform: none; opacity: 1 } }
+  .dot { animation: blink 1.2s infinite; } .dot:nth-child(2){animation-delay:.2s} .dot:nth-child(3){animation-delay:.4s}
+  @keyframes blink { 0%,60%,100%{opacity:.25} 30%{opacity:1} }
+  @media (prefers-reduced-motion: reduce) { .pop, .dot { animation: none } }
+  #feed::-webkit-scrollbar { width: 0 }
+</style>
+</head>
+<body class="font-sans text-slate-800">
+<main class="h-full flex flex-col">
+
+  <!-- Teléfono -->
+  <section class="w-full h-full max-w-[520px] mx-auto flex flex-col overflow-hidden bg-chat shadow-2xl">
+    <header class="bg-gradient-to-r from-wa to-wadark text-white shadow-md z-10 flex items-center gap-3 px-3 py-3">
+      <svg class="w-5 h-5 opacity-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 5l-7 7 7 7"/></svg>
+      <div class="w-10 h-10 rounded-full bg-gradient-to-br from-sky-200 to-sky-700 grid place-items-center text-xl">🐟</div>
+      <div class="flex-1 leading-tight">
+        <div class="text-xl font-bold flex items-center gap-1">Zarpa
+          <svg class="w-4 h-4 text-emerald-300" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 1.8 3-.2 1 2.8 2.6 1.6-.8 2.9 1.2 2.7-2.2 2.1-.4 3-3 .6L12 22l-2.8-1.7-3-.6-.4-3L3.6 14.6l1.2-2.7L4 9l2.6-1.6 1-2.8 3 .2z"/><path d="M8.5 12l2.5 2.5 4.5-5" stroke="#1f6b46" stroke-width="2" fill="none"/></svg>
+        </div>
+        <div id="status" class="text-xs text-emerald-100/80">cuenta de empresa</div>
+      </div>
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M3 7a2 2 0 012-2h9a2 2 0 012 2v3l5-3v10l-5-3v3a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8a15 15 0 006.6 6.6l2.2-2.2a1 1 0 011-.25 11 11 0 003.5.56 1 1 0 011 1V20a1 1 0 01-1 1A17 17 0 013 4a1 1 0 011-1h3.5a1 1 0 011 1c0 1.2.2 2.4.56 3.5a1 1 0 01-.25 1z"/></svg>
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+    </header>
+
+    <div id="feed" class="chatbg flex-1 overflow-y-auto px-3 py-3 space-y-2" aria-live="polite">
+      
+    </div>
+
+    <form id="form" class="chatbg flex items-center gap-2 px-2 pb-3 pt-1">
+      <div class="flex-1 flex items-center gap-2 bg-white rounded-full px-4 py-3 shadow-sm">
+        <span class="text-slate-400">☺</span>
+        <input id="input" autocomplete="off" placeholder="Escribe un mensaje" class="flex-1 outline-none bg-transparent text-xl placeholder-slate-500">
+      </div>
+      <button class="w-14 h-14 rounded-full bg-wa text-white grid place-items-center focus-visible:ring-2 ring-offset-2 ring-wa" aria-label="Enviar">
+        <svg class="w-7 h-7" viewBox="0 0 24 24" fill="currentColor"><path d="M3 20l18-8L3 4v6l12 2-12 2z"/></svg>
+      </button>
+    </form>
+  </section>
+
+  <!-- Panel de demo -->
+  
+</main>
+
+<script>
+// ---------- Estado SOLO en memoria (sin localStorage / cookies) ----------
+let S;
+const feed = document.getElementById('feed');
+const input = document.getElementById('input');
+const demos = document.querySelectorAll('.demo');
+
+function resetState() {
+  S = { step: 'start', name: '', beach: null, time: '', freq: null, busy: false };
+  feed.innerHTML = '';
+  demos.forEach(b => b.disabled = true);
+}
+
+const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const now = () => new Date().toLocaleTimeString('es-PE', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(/\s?([ap])\.?\s?m\.?/i, (_, x) => ' ' + x.toLowerCase() + '.m.');
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const scroll = () => feed.scrollTo({ top: feed.scrollHeight, behavior: 'smooth' });
+const tick = '<svg class="inline w-4 h-4 text-sky-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 13l4 4L14 8M9 15l1 1 9-9"/></svg>';
+
+function add(html) {
+  document.getElementById('empty')?.remove();
+  const d = document.createElement('div');
+  d.className = 'pop';
+  d.innerHTML = html;
+  feed.appendChild(d);
+  scroll();
+  return d;
+}
+
+function userMsg(text) {
+  add(`<div class="flex justify-end"><div class="bubble-out bg-mine px-3 py-1.5 max-w-[80%] shadow-sm">
+    <span class="text-xl">${esc(text)}</span>
+    <span class="text-sm text-slate-600 ml-2 align-bottom whitespace-nowrap">${now()} ${tick}</span></div></div>`);
+}
+
+function botMsg(html, { alert = false } = {}) {
+  add(`<div class="flex"><div class="bubble-in bg-white px-4 py-3 max-w-[92%] shadow-sm text-xl leading-snug ${alert ? 'border border-red-300' : ''}">
+    ${html}<div class="text-sm text-slate-500 text-right mt-1">${now()}</div></div></div>`);
+}
+
+function buttons(list, col = false) {
+  const wrap = add(`<div class="flex flex-wrap gap-3 ${col ? 'flex-col' : ''}"></div>`).firstChild;
+  list.forEach(label => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.className = 'bg-white text-emerald-900 font-bold text-xl px-5 py-4 rounded-2xl shadow border-2 border-emerald-700 active:bg-emerald-100 focus-visible:ring-4 ring-wa';
+    if (col) b.classList.add('w-full', 'text-left');
+    b.onclick = () => { if (S.busy) return; wrap.querySelectorAll('button').forEach(x => { x.disabled = true; x.classList.add('opacity-50'); }); handle(label); };
+    wrap.appendChild(b);
+  });
+}
+
+async function typing(ms = 800) {
+  const t = add(`<div class="flex"><div class="bubble-in bg-white px-4 py-3 shadow-sm flex gap-1">
+    <span class="dot w-2 h-2 rounded-full bg-slate-400"></span><span class="dot w-2 h-2 rounded-full bg-slate-400"></span><span class="dot w-2 h-2 rounded-full bg-slate-400"></span></div></div>`);
+  document.getElementById('status').textContent = 'escribiendo…';
+  await sleep(ms);
+  t.remove();
+  document.getElementById('status').textContent = 'cuenta de empresa';
+}
+
+// ---------- Contenido del bot ----------
+const fecha = () => {
+  const s = new Date().toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long' }).replace(' de ', ' de ');
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+
+function reportHTML() {
+  return `<div class="font-bold">🌟 Buenos días, ${esc(S.name)}</div>
+  <div class="font-bold">${fecha()}</div>
+  <div class="font-bold mb-2">${esc(S.beach.name)}</div>
+  <div class="bg-mine rounded-md px-2 py-1.5 font-extrabold text-2xl mb-2">🟢 HOY: BUENO PARA ZARPAR</div>
+  <div class="font-bold">🌊 MAREA:</div>
+  <div>⬇️ Baja 1:32 a.m. (0,3 m)</div><div>⬆️ Alta 6:49 a.m. (0,7 m)</div><div>⬇️ Baja 1:01 p.m. (0,1 m)</div>
+  <div class="mb-2 pl-6">Coeficiente 76: corrientes fuertes</div>
+  <div>💨 Viento: 12 km/h del sur – suave</div><div>〰️ Olas: 1,2 m – tranquilo</div>
+  <div>🌡️ Agua: 18 °C – normal</div><div>🎨 Color del mar: verde claro</div>
+  <div>🌅 Sale el sol: 5:42 a.m.</div><div>✅ Sin alertas de tsunami ni oleaje anómalo</div>
+  <div class="text-sm text-slate-500 mt-2">Fuentes: Tabla de mareas • Marina de Guerra del Perú • IMARPE</div>`;
+}
+
+async function sendReport() {
+  await typing(700);
+  botMsg(reportHTML());
+  buttons(['🎧 Ver zonas de pesca', '🌊 Marea de la semana', '📋 Menú']);
+}
+
+async function sendZones() {
+  await typing(700);
+  const map = `<div class="relative rounded-xl overflow-hidden h-40 mb-2" style="background:linear-gradient(135deg,#1d7fc4 0%,#2aa4c9 35%,#e8a33a 70%,#d9731f 100%)">
+    <div class="absolute inset-0" style="background:linear-gradient(150deg,transparent 48%,#8a8576 48%,#6f6a5a 100%)"></div>
+    <span class="absolute top-6 left-[38%] w-7 h-7 rounded-full bg-emerald-600 border-2 border-white text-white grid place-items-center text-sm font-bold">1</span>
+    <span class="absolute bottom-6 right-[22%] w-7 h-7 rounded-full bg-amber-400 border-2 border-white text-white grid place-items-center text-sm font-bold">2</span></div>`;
+  botMsg(`<div class="mb-1">Aquí tienes las zonas con más chance de pesca de hoy 👇</div>${map}
+    <div class="font-semibold">🎧 Zonas con más chance hoy:</div>
+    ${zoneRows()}
+    `);
+  buttons(['📍 Abrir en mapa', '📋 Menú']);
+}
+
+async function sendWeek() {
+  await typing(700);
+  const dias = ['Hoy', 'Mañana', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+  const rows = dias.map((d, i) => `<tr class="border-t border-slate-100"><td class="pr-3 py-0.5 font-medium">${d}</td>
+    <td class="pr-3">⬇️ ${(1 + i * 0.4).toFixed(0)}:${i % 2 ? '45' : '15'} a.m.</td><td>⬆️ ${6 + (i % 3)}:${i % 2 ? '10' : '40'} a.m.</td></tr>`).join('');
+  botMsg(`<div class="font-bold mb-1">🌊 Marea de la semana</div><table class="text-lg">${rows}</table>
+    <div class="text-sm text-slate-500 mt-1">Datos de ejemplo</div>`);
+  buttons(['📋 Menú']);
+}
+
+async function sendMenu() {
+  await typing(500);
+  botMsg('<div class="font-bold">Menú Zarpa</div>¿Qué quieres ver? Toca una opción 👇');
+  buttons(['🌅 Reporte de hoy', '🔄 Actualización del mar', '🎧 Zonas de pesca', '🌊 Marea de la semana', '⚠️ Alertas activas', '⚙️ Ajustes'], true);
+}
+
+const BEACHES = [
+  { k: 'pescadores', label: 'Los Pescadores – Chorrillos', name: 'Los Pescadores, Chorrillos', reg: 'Lima', z: [['Al sur del Morro Solar', 4, 17, 'alta'], ['Frente a Agua Dulce', 2, 18, 'media']] },
+  { k: 'punta', label: 'La Punta', name: 'La Punta, Callao', reg: 'Callao', z: [['Al oeste de la isla San Lorenzo', 5, 17, 'alta'], ['Frente a La Punta', 2, 18, 'media']] },
+  { k: 'pucusana', label: 'Pucusana', name: 'Pucusana', reg: 'Lima', z: [['Frente a la isla Pucusana', 3, 17, 'alta'], ['Cerca de Punta Lobos', 4, 16, 'media']] },
+  { k: 'chimbote', label: 'Chimbote', name: 'Chimbote', reg: 'Áncash', z: [['Bahía El Ferrol', 3, 18, 'alta'], ['Cerca de Isla Blanca', 5, 17, 'media']] },
+  { k: 'casma', label: 'Casma – Tortugas', name: 'Tortugas, Casma', reg: 'Áncash', z: [['Frente a la bahía Tortugas', 2, 18, 'alta'], ['Mar afuera de Tortugas', 5, 17, 'media']] },
+  { k: 'paracas', label: 'Paracas – Pisco', name: 'Paracas, Pisco', reg: 'Ica', z: [['Frente a Lagunillas', 3, 19, 'alta'], ['Cerca de las islas Ballestas', 6, 18, 'media']] },
+  { k: 'marcona', label: 'San Juan de Marcona', name: 'San Juan de Marcona', reg: 'Ica', z: [['Punta San Juan', 4, 17, 'alta'], ['Frente a Marcona', 3, 18, 'media']] },
+  { k: 'paita', label: 'Paita', name: 'Paita', reg: 'Piura', z: [['Cerca de Isla Foca', 3, 21, 'alta'], ['Frente a Colán', 4, 22, 'media']] },
+  { k: 'moquegua', label: 'Ilo', name: 'Ilo', reg: 'Moquegua', z: [['Frente a Punta Coles', 4, 16, 'alta'], ['Dentro de la bahía de Ilo', 2, 17, 'media']] },
+];
+const FREQS = [
+  { k: '3 horas', label: 'Cada 3 horas' },
+  { k: '6 horas', label: 'Cada 6 horas' },
+  { k: 'manana', label: 'Solo en la mañana' },
+  { k: 'peligro', label: 'Solo si hay peligro' },
+];
+const askBeachButtons = () => buttons(BEACHES.map(b => `${b.label} · ${b.reg}`), true);
+const zoneRows = () => S.beach.z.map((z, i) => `<div class="flex items-center gap-3 mt-2 rounded-xl bg-slate-50 border border-slate-200 p-2"><span class="w-9 h-9 shrink-0 rounded-full grid place-items-center text-white font-bold ${i ? 'bg-amber-400' : 'bg-emerald-600'}">${i + 1}</span><div><div class="font-bold leading-tight">${z[0]}</div><div class="text-lg text-slate-600">${z[1]} millas · agua ${z[2]} °C · ${z[3] === 'alta' ? '🟢 alta' : '😔 media'}</div></div></div>`).join('');
+
+async function askFreq(again = false) {
+  await typing(600);
+  botMsg('🔔 ¿Cada cuánto quieres que te avise cómo va el mar durante el día?');
+  buttons(FREQS.map(x => x.label), true);
+  S.step = again ? 'refreq' : 'freq';
+}
+
+async function sendSettings() {
+  await typing(500);
+  botMsg(`<div class="font-bold mb-2">⚙️ Tu configuración</div><div>📍 ${S.beach.name}</div><div>⏰ Reporte a las ${S.time}</div><div>🔔 Actualizaciones: ${S.freq.label.toLowerCase()}</div>`);
+  buttons(['📍 Cambiar de playa', '⏰ Cambiar hora del reporte', '🔔 Cambiar frecuencia', '📋 Menú'], true);
+}
+
+async function sendUpdate() {
+  await typing(900);
+  botMsg(`<div class="-mx-4 -mt-3 mb-3 px-4 py-2 rounded-tr-[18px] bg-sky-700 text-white font-bold flex justify-between"><span>🔄 ACTUALIZACIÓN</span><span>${now()}</span></div>
+    <div class="font-bold mb-2">${esc(S.beach.name)}</div>
+    <div class="rounded-2xl border-2 border-emerald-600 bg-emerald-50 p-3 mb-3">
+      <div class="font-bold text-emerald-900">🛡️ SISMOS Y TSUNAMI</div>
+      <div class="font-extrabold text-2xl text-emerald-800 my-1">🟢 SIN RIESGO DE TSUNAMI</div>
+      <div>📉 Sismos fuertes en 24 h: <b>ninguno</b></div>
+      <div>Último sismo: M 3,6, lejos de la costa, hace 5 h</div>
+      <div class="text-sm text-slate-500 mt-1">Fuentes: IGP • DHN</div>
+    </div>
+    <div class="font-bold">🌊 El mar ahora</div>
+    <div>⬆️ Próxima alta: 6:49 a.m. (0,7 m)</div><div>〰️ Olas: 1,2 m – tranquilo</div><div>💨 Viento: 12 km/h del sur – suave</div><div>🌡️ Agua: 18 °C – normal</div>
+    <div class="font-bold mt-3">🎧 Zonas con más chance</div>${zoneRows()}
+    <div class="text-sm text-slate-500 mt-2">Datos de ejemplo</div>`);
+  buttons(['📋 Menú']);
+}
+
+async function sendAlert() {
+  botMsg(`<div class="font-bold mb-1">🔴 ALERTA DE OLEAJE</div>
+    Desde mañana miércoles olas de hasta 2,5 m en la costa de Lima.<br>Fuente: Marina de Guerra del Perú.<br>Recomendación: no salir en bote pequeño.`, { alert: true });
+  buttons(['Entendido 👍', 'Más información']);
+}
+
+async function askTime() {
+  await typing(600);
+  botMsg('¿A qué hora quieres tu reporte?');
+  buttons(['3:30 a.m.', '4:00 a.m.', '4:30 a.m.']);
+  S.step = 'time';
+}
+
+// ---------- Lógica de conversación ----------
+const norm = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9: ]/g, '').trim();
+
+async function handle(text) {
+  if (S.busy) return;
+  S.busy = true;
+  userMsg(text);
+  const t = norm(text);
+  try {
+    if (S.step === 'start') {
+      await typing();
+      botMsg('¡Hola! 👋 Soy Zarpa, tu ayudante para el mar. Cada mañana te mando cómo estará el mar antes de que salgas. ¿Cómo te llamo?');
+      S.step = 'name';
+    } else if (S.step === 'name') {
+      S.name = text.trim().replace(/^./, c => c.toUpperCase());
+      await typing();
+      botMsg(`Gusto, ${esc(S.name)} 🙌 ¿Desde qué playa sales?`);
+      askBeachButtons();
+      S.step = 'beach';
+    } else if (S.step === 'beach' || S.step === 'rebeach') {
+      const b = BEACHES.find(x => t.includes(x.k));
+      if (!b) {
+        await typing();
+        botMsg('Toca una de las playas de la lista 👇');
+        askBeachButtons();
+      } else {
+        S.beach = b;
+        if (S.step === 'rebeach') { await typing(); botMsg(`¡Listo! ✅ Ahora tu reporte es de <b>${b.name}</b>.`); S.step = 'ready'; await sendMenu(); return; }
+        await askTime();
+      }
+    } else if (S.step === 'freq' || S.step === 'refreq') {
+      const f = FREQS.find(x => t.includes(x.k));
+      if (!f) { await typing(); botMsg('Toca una opción 👇'); buttons(FREQS.map(x => x.label), true); }
+      else {
+        const first = S.step === 'freq';
+        S.freq = f;
+        await typing();
+        botMsg(first ? `¡Listo! ✅ Mañana a las ${S.time} te llega tu reporte.<br>🔔 Actualizaciones: <b>${f.label.toLowerCase()}</b>.` : `¡Listo! ✅ Actualizaciones: <b>${f.label.toLowerCase()}</b>.`);
+        S.step = 'ready';
+        await sendMenu();
+      }
+    } else if (S.step === 'time' || S.step === 'retime') {
+      const m = text.match(/\d{1,2}:\d{2}/);
+      if (!m) { await typing(); botMsg('Elige una hora: 3:30, 4:00 o 4:30 a.m.'); buttons(['3:30 a.m.', '4:00 a.m.', '4:30 a.m.']); }
+      else {
+        S.time = m[0] + ' a.m.';
+        const first = S.step === 'time';
+        if (first) { await askFreq(); return; }
+        await typing();
+        botMsg(first ? `¡Listo! ✅ Mañana a las ${S.time} te llega tu reporte.` : `¡Listo! ✅ Tu reporte ahora llega a las ${S.time}.`);
+        S.step = 'ready';
+        await sendMenu();
+      }
+    } else {
+      // Ya configurado: menú y atajos
+      if (t.includes('menu')) await sendMenu();
+      else if (t.includes('playa')) { await typing(); botMsg('📍 ¿Desde qué playa sales?'); askBeachButtons(); S.step = 'rebeach'; }
+      else if (t.includes('hora')) { await askTime(); S.step = 'retime'; }
+      else if (t.includes('frecuencia')) await askFreq(true);
+      else if (t.includes('ajustes')) await sendSettings();
+      else if (t.includes('actualizacion')) await sendUpdate();
+      else if (t === '1' || t.includes('reporte de hoy')) await sendReport();
+      else if (t === '2' || t.includes('marea')) await sendWeek();
+      else if (t === '3' || t.includes('zona')) await sendZones();
+      else if (t === '4' || t.includes('alerta')) { await typing(); await sendAlert(); }
+      
+      else if (t.includes('abrir en mapa')) window.open('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(S.beach.name + ', Perú'), '_blank', 'noopener');
+      else if (t.includes('entendido')) { await typing(400); botMsg('Gracias por confirmar 🤝 Cuídate en el mar.'); }
+      else if (t.includes('mas informacion')) { await typing(); botMsg('Oleaje anómalo ligero a moderado desde el miércoles. Revisa el aviso completo de la Marina de Guerra del Perú (DHN) antes de zarpar.'); buttons(['📋 Menú']); }
+      else { await typing(); botMsg('No te entendí 🤔 Toca una opción 👇'); await sendMenu(); }
+    }
+  } finally { S.busy = false; }
+}
+
+document.getElementById('form').addEventListener('submit', e => {
+  e.preventDefault();
+  const v = input.value.trim();
+  if (!v) return;
+  input.value = '';
+  handle(v);
+});
+
+demos.forEach(b => b.onclick = async () => {
+  if (S.step === 'start' || S.busy) return;
+  b.dataset.demo === 'report' ? sendReport() : sendAlert();
+});
+resetState();
+// El bot arranca solo: se envía "Hola" apenas carga la página
+setTimeout(() => handle('Hola'), 600);
+</script>
+</body>
+</html>
